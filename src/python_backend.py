@@ -1,3 +1,5 @@
+"""Python-native ND2 ingestion, segmentation, caching, and sample execution."""
+
 from __future__ import annotations
 
 import hashlib
@@ -33,21 +35,25 @@ PYTHON_BACKEND_VERSION = "python_native_nd2_v2.6"
 
 
 def require_nd2() -> None:
+    """Raise a clear error if Nikon ND2 support is unavailable."""
     if _ND2_IMPORT_ERROR is not None:
         raise RuntimeError("The nd2 package is required for the python_native_nd2 backend") from _ND2_IMPORT_ERROR
 
 
 def _safe_slug(value: str) -> str:
+    """Convert a session label into a filesystem-safe cache directory name."""
     return "".join(char.lower() if char.isalnum() else "_" for char in value).strip("_")
 
 
 def _json_default(value: Any) -> Any:
+    """Serialize Path objects when hashing or storing config dictionaries."""
     if isinstance(value, Path):
         return str(value)
     return value
 
 
 def _file_signature(path: Path) -> dict[str, Any]:
+    """Capture the file fields that invalidate per-sample caches."""
     stat = path.stat()
     return {
         "path": str(path.resolve()),
@@ -57,10 +63,12 @@ def _file_signature(path: Path) -> dict[str, Any]:
 
 
 def _is_onedrive_path(path: Path) -> bool:
+    """Detect cloud-synced paths that benefit from local staging before reading."""
     return any("onedrive" in part.lower() for part in path.parts)
 
 
 def _stage_nd2_file(source_path: Path, cache_dir: Path, session_label: str, mode: str) -> tuple[Path, bool]:
+    """Optionally copy an ND2 file into the cache before processing."""
     if mode == "never":
         return source_path, False
     if mode == "auto" and not _is_onedrive_path(source_path):
@@ -81,6 +89,7 @@ def _stage_nd2_file(source_path: Path, cache_dir: Path, session_label: str, mode
 
 
 def _discover_nd2_files(session: SessionConfig) -> list[tuple[str, Path]]:
+    """Return valid sample-prefix/ND2-path pairs for a raw-image session."""
     if session.nd2_dir is None:
         return []
     pairs: list[tuple[str, Path]] = []
@@ -92,6 +101,7 @@ def _discover_nd2_files(session: SessionConfig) -> list[tuple[str, Path]]:
 
 
 def _resolve_channel_index(ndfile: Any, channel_spec: int | str) -> int:
+    """Resolve a channel by zero-based index or by ND2 channel name."""
     channel_count = int(getattr(ndfile, "sizes", {}).get("C", 1))
     if isinstance(channel_spec, int):
         if channel_spec < 0 or channel_spec >= channel_count:
@@ -121,6 +131,7 @@ def _resolve_channel_index(ndfile: Any, channel_spec: int | str) -> int:
 
 
 def _extract_channel_stack(data: np.ndarray, axis_names: list[str], channel_index: int) -> np.ndarray:
+    """Extract one channel and normalize it to a float32 Z/Y/X stack."""
     indexer: list[int | slice] = []
     kept_axes: list[str] = []
     for axis_name, axis_size in zip(axis_names, data.shape, strict=False):
@@ -151,6 +162,7 @@ def _read_nd2_channels(
     scer_channel: int | str,
     hflu_channel: int | str,
 ) -> tuple[np.ndarray, np.ndarray, tuple[float, float, float]]:
+    """Read configured scer/hflu channels and physical voxel spacing from an ND2 file."""
     require_nd2()
     with nd2.ND2File(nd2_path) as ndfile:
         data = ndfile.asarray()
@@ -169,10 +181,12 @@ def _read_nd2_channels(
 
 
 def _cache_manifest_path(sample_cache_dir: Path) -> Path:
+    """Return the cache manifest path for one sample."""
     return sample_cache_dir / "manifest.json"
 
 
 def _measurement_cache_paths(sample_cache_dir: Path) -> tuple[Path, Path, Path]:
+    """Return the cached measurement and label-stack paths for one sample."""
     return (
         sample_cache_dir / "hflu_measurements.csv",
         sample_cache_dir / "scer_measurements.csv",
@@ -181,6 +195,7 @@ def _measurement_cache_paths(sample_cache_dir: Path) -> tuple[Path, Path, Path]:
 
 
 def _load_cache(sample_cache_dir: Path, source_sig: dict[str, Any], config_hash: str) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame, dict[str, np.ndarray]] | None:
+    """Load cached segmentation outputs when input, config, and backend match."""
     manifest_path = _cache_manifest_path(sample_cache_dir)
     hflu_path, scer_path, labels_path = _measurement_cache_paths(sample_cache_dir)
     if not manifest_path.exists() or not hflu_path.exists() or not scer_path.exists() or not labels_path.exists():
@@ -208,6 +223,7 @@ def _write_cache(
     arrays: dict[str, np.ndarray],
     timings: dict[str, float],
 ) -> None:
+    """Persist per-sample segmentation outputs for deterministic resumability."""
     sample_cache_dir.mkdir(parents=True, exist_ok=True)
     hflu_path, scer_path, labels_path = _measurement_cache_paths(sample_cache_dir)
     hflu_df.to_csv(hflu_path, index=False)
@@ -223,6 +239,7 @@ def _write_cache(
 
 
 def _normalize_projection(image: np.ndarray) -> np.ndarray:
+    """Scale a projection into 0..1 for diagnostic image output."""
     image = np.asarray(image, dtype=float)
     if image.size == 0:
         return image
@@ -242,6 +259,7 @@ def _save_qc_panel(
     hflu_mask_max: np.ndarray,
     engulfed_mask_max: np.ndarray,
 ) -> None:
+    """Write max projections and a compact overlay panel for visual QC."""
     qc_dir.mkdir(parents=True, exist_ok=True)
 
     scer_norm = _normalize_projection(scer_raw_max)
@@ -277,12 +295,14 @@ def _save_qc_panel(
 
 
 def _assignment_details_path(output_dir: Path, sample_prefix: str) -> Path:
+    """Return the per-sample containment assignment CSV path."""
     assignment_dir = output_dir / "per_sample"
     assignment_dir.mkdir(parents=True, exist_ok=True)
     return assignment_dir / f"assignment_{sample_prefix}.csv"
 
 
 def _build_task_config(config: PipelineConfig) -> dict[str, Any]:
+    """Extract the config fields that affect per-sample ND2 processing."""
     return {
         "pipeline": config.pipeline.model_dump(mode="json"),
         "segmentation": config.segmentation.model_dump(mode="json") if config.segmentation is not None else None,
@@ -291,11 +311,13 @@ def _build_task_config(config: PipelineConfig) -> dict[str, Any]:
 
 
 def _config_hash(task_config: dict[str, Any]) -> str:
+    """Hash processing settings so caches invalidate when analysis parameters change."""
     payload = json.dumps(task_config, default=_json_default, sort_keys=True)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
 def _review_required(scer_df: pd.DataFrame, hflu_df: pd.DataFrame, ambiguous_bacteria_count: int) -> bool:
+    """Flag samples whose segmentation or assignment metrics deserve manual review."""
     scer_before = max(1, len(scer_df))
     hflu_before = max(1, len(hflu_df))
     scer_merged = int(scer_df["reject_reason"].fillna("").str.contains("merged_shape").sum()) if "reject_reason" in scer_df else 0
@@ -312,6 +334,7 @@ def _review_required(scer_df: pd.DataFrame, hflu_df: pd.DataFrame, ambiguous_bac
 
 
 def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
+    """Process one ND2 file from raw stacks through final sample-level metrics."""
     sample_start = time.perf_counter()
     session_label = str(task["session_label"])
     sample_prefix = str(task["sample_prefix"])
@@ -325,6 +348,8 @@ def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
     config_hash = _config_hash(task_config)
     sample_cache_dir = cache_dir / _safe_slug(session_label) / sample_prefix
 
+    # Staging is tracked separately from cache hits: a sample may be staged even
+    # when segmentation is recomputed because the config or source changed.
     staged_path, staged_local = _stage_nd2_file(
         nd2_path,
         cache_dir,
@@ -340,6 +365,8 @@ def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
         from_cache = True
     else:
         segmentation_start = time.perf_counter()
+        # Raw channels are processed independently so channel-specific thresholds
+        # and size filters can be tuned without changing the output schema.
         scer_stack, hflu_stack, spacing_zyx = _read_nd2_channels(
             staged_path,
             task_config["segmentation"]["scer"]["channel"],
@@ -386,6 +413,8 @@ def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
     session_csv_dir.mkdir(parents=True, exist_ok=True)
     hflu_csv_path = session_csv_dir / f"{sample_prefix}_hflu.csv"
     scer_csv_path = session_csv_dir / f"{sample_prefix}_scer.csv"
+    # The ND2 backend emits ImageJ-compatible object CSVs so downstream analysis
+    # can use the same summary writers as legacy CSV sessions.
     hflu_df.to_csv(hflu_csv_path, index=False)
     scer_df.to_csv(scer_csv_path, index=False)
 
@@ -403,6 +432,8 @@ def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
         allow_shared_bacteria=bool(task_config["engulfment"]["allow_shared_bacteria"]),
     )
     if bool(task_config["engulfment"].get("require_shell_cavity_support", False)):
+        # Shell-cavity support is an optional second pass for channels where the
+        # larger object is represented by a membrane or wall stain.
         engulfment_result = validate_shell_cavity_support(
             engulfment_result,
             arrays["hflu_labels"],
@@ -420,6 +451,8 @@ def _process_nd2_sample(task: dict[str, Any]) -> SampleResult:
         assignment_df.to_csv(_assignment_details_path(output_dir, sample_prefix), index=False)
 
     if bool(task_config["pipeline"]["save_qc_overlays"]):
+        # The overlay marks yeast labels that passed the containment classifier,
+        # not every detected object in the field of view.
         engulfed_mask = np.isin(
             arrays["scer_labels"],
             scer_filtered.iloc[engulfment_result.engulfed_yeast_indices]["label_id"].to_numpy(dtype=int)
@@ -475,6 +508,7 @@ def process_nd2_session(
     output_dir: Path,
     logger,
 ) -> list[SampleResult]:
+    """Process all valid ND2 files in a session with sample-level parallelism."""
     nd2_files = _discover_nd2_files(session)
     if not nd2_files:
         logger.warning("No ND2 files discovered for session '%s' in %s", session.label, session.nd2_dir)
@@ -495,6 +529,8 @@ def process_nd2_session(
         for prefix, path in nd2_files
     ]
 
+    # Parallelism is intentionally at the sample level; individual stack
+    # segmentation remains single-process to limit memory pressure per worker.
     max_workers = min(int(config.pipeline.workers), max(1, len(tasks)))
     results: list[SampleResult] = []
     with ProcessPoolExecutor(max_workers=max_workers) as executor:

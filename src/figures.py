@@ -1,3 +1,5 @@
+"""Plotting helpers for run-level figures."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -12,6 +14,7 @@ import numpy as np
 
 
 def apply_publication_style(ax: plt.Axes) -> None:
+    """Apply a consistent minimal style to a Matplotlib axis."""
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.set_facecolor("white")
@@ -22,12 +25,14 @@ def apply_publication_style(ax: plt.Axes) -> None:
 
 
 def _output_path(output_dir: Path, filename: str, config) -> Path:
+    """Create the figures directory and return a configured figure path."""
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
     return figures_dir / f"{filename}.{config.format}"
 
 
 def _group_results(results) -> dict[str, list[float]]:
+    """Collect sample-level engulfment rates by biological replicate."""
     grouped: dict[str, list[float]] = defaultdict(list)
     for result in results:
         grouped[result.biological_replicate].append(float(result.engulfment_rate))
@@ -35,11 +40,13 @@ def _group_results(results) -> dict[str, list[float]]:
 
 
 def _replicate_colors(replicates: list[str]) -> dict[str, str]:
+    """Assign stable colors to replicate labels in display order."""
     palette = ["#355070", "#6d597a", "#b56576", "#e56b6f", "#eaac8b", "#4f772d"]
     return {replicate: palette[index % len(palette)] for index, replicate in enumerate(replicates)}
 
 
 def _annotate_group_result(ax: plt.Axes, group_result) -> None:
+    """Annotate a plot with the selected group-comparison p-value when available."""
     if group_result is None or group_result.test_name == "not_applicable" or group_result.p_value is None:
         return
     ax.text(
@@ -55,6 +62,7 @@ def _annotate_group_result(ax: plt.Axes, group_result) -> None:
 
 
 def plot_boxplot(stats, results, group_result, output_dir: Path, config) -> Path:
+    """Write a boxplot with jittered sample-level rates by replicate."""
     grouped = _group_results(results)
     replicates = list(grouped)
     colors = _replicate_colors(replicates)
@@ -68,6 +76,7 @@ def plot_boxplot(stats, results, group_result, output_dir: Path, config) -> Path
         patch.set_facecolor(colors[replicate])
         patch.set_alpha(0.6)
 
+    # Fixed jitter keeps the figure deterministic across repeated runs.
     rng = np.random.default_rng(42)
     for position, replicate in zip(positions, replicates, strict=False):
         values = np.array(grouped[replicate], dtype=float)
@@ -95,6 +104,7 @@ def plot_boxplot(stats, results, group_result, output_dir: Path, config) -> Path
 
 
 def plot_bar_chart(stats, group_result, output_dir: Path, config) -> Path:
+    """Write replicate mean engulfment rates with SEM error bars."""
     replicates = [item.biological_replicate for item in stats]
     means = [item.mean_engulfment_rate for item in stats]
     sems = [item.sem_engulfment_rate for item in stats]
@@ -125,6 +135,7 @@ def plot_bar_chart(stats, group_result, output_dir: Path, config) -> Path:
 
 
 def plot_violin(stats, results, output_dir: Path, config) -> Path:
+    """Write a violin plot of sample-level rates by replicate."""
     grouped = _group_results(results)
     replicates = list(grouped)
     positions = np.arange(1, len(replicates) + 1)

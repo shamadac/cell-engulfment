@@ -1,3 +1,5 @@
+"""Diagnostic plots for object-size distributions."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,6 +21,7 @@ def plot_size_histogram(
     output_dir: Path,
     config,
 ) -> Path:
+    """Write a volume histogram with the configured size-filter bounds marked."""
     diagnostics_dir = output_dir / "cell_sizes"
     diagnostics_dir.mkdir(parents=True, exist_ok=True)
 

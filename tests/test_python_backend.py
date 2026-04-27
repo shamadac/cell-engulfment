@@ -1,3 +1,5 @@
+"""Tests for ND2 backend caching, staging, and sample processing."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -166,7 +168,7 @@ def test_process_nd2_sample_uses_cache_on_second_run(tmp_path: Path, monkeypatch
 
 
 def test_stage_nd2_file_copies_from_onedrive_paths(tmp_path: Path) -> None:
-    onedrive_dir = tmp_path / "OneDrive - Test" / "microscope"
+    onedrive_dir = tmp_path / "onedrive_test" / "microscope"
     onedrive_dir.mkdir(parents=True)
     source_path = onedrive_dir / "A1.nd2"
     source_path.write_text("fake", encoding="utf-8")

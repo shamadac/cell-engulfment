@@ -1,3 +1,5 @@
+"""Discovery and validation for paired object-measurement CSV files."""
+
 from __future__ import annotations
 
 import re
@@ -25,6 +27,8 @@ SAMPLE_PREFIX_RE = re.compile(r"^[A-Z][1-9][0-9]*$")
 
 @dataclass(frozen=True)
 class Sample:
+    """A paired hflu/scer field of view and its replicate identifiers."""
+
     prefix: str
     session_label: str
     biological_replicate: str
@@ -34,16 +38,23 @@ class Sample:
 
 
 def _extract_prefix(path: Path, suffix: str) -> str | None:
+    """Return the sample prefix before a known measurement-file suffix."""
     if not path.name.endswith(suffix):
         return None
     return path.name[: -len(suffix)]
 
 
 def _is_valid_prefix(prefix: str) -> bool:
+    """Check that a sample name encodes replicate letter and image number."""
     return bool(SAMPLE_PREFIX_RE.match(prefix))
 
 
 def discover_samples(session_dir: Path, session_label: str, logger) -> list[Sample]:
+    """Find paired hflu/scer CSVs in a session directory.
+
+    Unpaired or invalidly named files are skipped with a warning so that a single
+    bad export does not prevent the rest of a session from being analyzed.
+    """
     hflu_by_prefix: dict[str, Path] = {}
     scer_by_prefix: dict[str, Path] = {}
 
@@ -87,6 +98,7 @@ def discover_samples(session_dir: Path, session_label: str, logger) -> list[Samp
 
 
 def load_sample_csvs(sample: Sample) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load the hflu/scer object tables and verify the required measurement columns."""
     hflu_df = pd.read_csv(sample.hflu_path)
     scer_df = pd.read_csv(sample.scer_path)
 

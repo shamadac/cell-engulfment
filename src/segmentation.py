@@ -1,3 +1,5 @@
+"""3D segmentation and measurement routines for fluorescence image stacks."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,6 +22,7 @@ else:
 
 
 def require_skimage() -> None:
+    """Raise a clear error if the optional image-processing dependency is missing."""
     if _SKIMAGE_IMPORT_ERROR is not None:
         raise RuntimeError(
             "scikit-image is required for the python_native_nd2 backend"
@@ -28,6 +31,8 @@ def require_skimage() -> None:
 
 @dataclass(frozen=True)
 class ChannelArtifacts:
+    """Intermediate arrays and measurements produced for one fluorescence channel."""
+
     raw_stack: np.ndarray
     preprocessed_stack: np.ndarray
     binary_mask: np.ndarray
@@ -37,9 +42,12 @@ class ChannelArtifacts:
 
 
 def _compute_threshold(values: np.ndarray, method: str) -> float:
+    """Compute an intensity threshold using one of the supported global methods."""
     require_skimage()
     finite = np.asarray(values[np.isfinite(values)], dtype=float)
     positive = finite[finite > 0]
+    # Ignore zero-valued background when possible so sparse channels do not bias
+    # automatic thresholds toward the lower edge of the camera range.
     if positive.size > 0:
         finite = positive
     if finite.size == 0:
@@ -60,10 +68,12 @@ def _compute_threshold(values: np.ndarray, method: str) -> float:
 
 
 def _scaled_threshold(values: np.ndarray, method: str, scale: float) -> float:
+    """Apply a user-configurable multiplier to an automatic threshold."""
     return _compute_threshold(values, method) * float(scale)
 
 
 def _resolve_spacing(spacing_zyx: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Replace missing or invalid voxel spacing with 1.0 um fallbacks."""
     z, y, x = spacing_zyx
     return (
         float(z if z and z > 0 else 1.0),
@@ -73,11 +83,13 @@ def _resolve_spacing(spacing_zyx: tuple[float, float, float]) -> tuple[float, fl
 
 
 def _peak_min_distance_px(spacing_zyx: tuple[float, float, float], min_distance_um: float) -> int:
+    """Convert a physical watershed seed distance into a conservative pixel radius."""
     min_spacing = min(_resolve_spacing(spacing_zyx))
     return max(1, int(round(min_distance_um / min_spacing)))
 
 
 def _needs_watershed(labels: np.ndarray, voxel_volume_um3: float, max_volume_um3: float | None) -> bool:
+    """Skip watershed unless at least one component is large enough to be merged."""
     if max_volume_um3 is None:
         return True
     if labels.max() == 0:
@@ -97,6 +109,7 @@ def _split_components(
     enable_watershed: bool,
     max_volume_um3: float | None = None,
 ) -> np.ndarray:
+    """Label binary components and optionally split oversized components by watershed."""
     require_skimage()
     initial_labels = measure.label(binary_mask.astype(np.uint8), connectivity=1)
     if initial_labels.max() == 0:
@@ -106,6 +119,8 @@ def _split_components(
     if not enable_watershed or not _needs_watershed(initial_labels, voxel_volume_um3, max_volume_um3):
         return initial_labels.astype(np.int32)
 
+    # Physical voxel spacing keeps watershed splitting comparable across image
+    # stacks with different pixel sizes or z-step intervals.
     distance = ndi.distance_transform_edt(binary_mask, sampling=spacing_zyx)
     coords = feature.peak_local_max(
         distance,
@@ -130,6 +145,7 @@ def _measure_labels(
     max_volume_um3: float,
     remove_border_objects: bool,
 ) -> pd.DataFrame:
+    """Measure labeled objects and attach rule-based quality-control flags."""
     require_skimage()
     spacing_zyx = _resolve_spacing(spacing_zyx)
     voxel_volume_um3 = float(np.prod(spacing_zyx))
@@ -151,6 +167,8 @@ def _measure_labels(
             or max_x == labels.shape[2]
         )
 
+        # region.area is in voxels; converting with voxel volume keeps size
+        # filters independent of microscope magnification or z-step.
         volume_um3 = float(region.area * voxel_volume_um3)
         occupancy = float(volume_um3 / bbox_volume_um3) if bbox_volume_um3 > 0 else 0.0
         reject_reasons: list[str] = []
@@ -225,6 +243,7 @@ def segment_scer_stack(
     spacing_zyx: tuple[float, float, float],
     config,
 ) -> ChannelArtifacts:
+    """Segment the scer channel as a shell-like signal with filled interiors."""
     require_skimage()
     stack = stack.astype(np.float32)
     background = ndi.gaussian_filter(
@@ -242,6 +261,8 @@ def segment_scer_stack(
         mask = slice_data > threshold
         mask = ndi.binary_closing(mask, structure=np.ones((3, 3), dtype=bool))
         support_slices[z_index] = mask
+        # The support mask preserves the wall/shell signal; the filled mask is
+        # used as the candidate yeast-associated volume for containment tests.
         binary_slices[z_index] = ndi.binary_fill_holes(mask)
 
     binary_slices = ndi.binary_opening(binary_slices, structure=np.ones((1, 3, 3), dtype=bool))
@@ -276,6 +297,7 @@ def segment_hflu_stack(
     spacing_zyx: tuple[float, float, float],
     config,
 ) -> ChannelArtifacts:
+    """Segment the hflu channel as discrete fluorescent bacterial objects."""
     require_skimage()
     stack = stack.astype(np.float32)
     background = ndi.gaussian_filter(stack, sigma=tuple(max(value * 3, 1.0) for value in config.gaussian_sigma_xyz))
@@ -287,6 +309,8 @@ def segment_hflu_stack(
         float(getattr(config, "threshold_scale", 1.0)),
     )
     binary_mask = smoothed > threshold
+    # A small in-plane opening/closing removes isolated specks while avoiding
+    # aggressive z-axis morphology on anisotropic stacks.
     binary_mask = ndi.binary_opening(binary_mask, structure=np.ones((1, 2, 2), dtype=bool))
     binary_mask = ndi.binary_closing(binary_mask, structure=np.ones((1, 2, 2), dtype=bool))
 

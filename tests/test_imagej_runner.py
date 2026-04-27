@@ -1,3 +1,5 @@
+"""Tests for the optional ImageJ macro subprocess wrapper."""
+
 from __future__ import annotations
 
 import logging

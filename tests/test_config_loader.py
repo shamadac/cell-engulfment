@@ -1,3 +1,5 @@
+"""Tests for YAML loading, default hydration, and path validation."""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,3 +1,5 @@
+"""Dataclasses shared across analysis, reporting, and plotting modules."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -5,6 +7,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class SampleResult:
+    """One row of sample-level analysis output."""
+
     sample_name: str
     session_label: str
     biological_replicate: str

@@ -1,3 +1,5 @@
+"""CSV writers for per-sample and run-level pipeline outputs."""
+
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -8,6 +10,7 @@ from pandas.api.types import is_float_dtype
 
 
 def write_per_sample_csv(result, output_dir: Path) -> None:
+    """Write the complete result object for a single sample."""
     per_sample_dir = output_dir / "per_sample"
     per_sample_dir.mkdir(parents=True, exist_ok=True)
     output_path = per_sample_dir / f"results_{result.sample_name}.csv"
@@ -15,6 +18,7 @@ def write_per_sample_csv(result, output_dir: Path) -> None:
 
 
 def write_summary_csv(results, output_dir: Path) -> None:
+    """Write the main summary table used for downstream reporting."""
     summary_path = output_dir / "summary.csv"
     rows = []
     for result in results:
@@ -31,6 +35,7 @@ def write_summary_csv(results, output_dir: Path) -> None:
 
 
 def write_qc_summary_csv(results, output_dir: Path) -> None:
+    """Write compact QC flags and rejection counts for each sample."""
     rows = [
         {
             "sample_name": result.sample_name,
@@ -50,6 +55,7 @@ def write_qc_summary_csv(results, output_dir: Path) -> None:
 
 
 def write_performance_csv(results, output_dir: Path) -> None:
+    """Write timing and cache/staging metadata for each processed sample."""
     rows = [
         {
             "sample_name": result.sample_name,
@@ -66,6 +72,7 @@ def write_performance_csv(results, output_dir: Path) -> None:
 
 
 def write_statistical_report(replicate_stats, group_result, output_dir: Path) -> None:
+    """Write replicate statistics plus the selected group-comparison test."""
     rows: list[dict] = []
     for replicate_stat in replicate_stats:
         rows.append(

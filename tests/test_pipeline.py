@@ -1,3 +1,5 @@
+"""Tests for end-to-end pipeline orchestration."""
+
 from __future__ import annotations
 
 import logging

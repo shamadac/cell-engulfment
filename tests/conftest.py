@@ -1,3 +1,5 @@
+"""Shared pytest setup for importing modules from the src directory."""
+
 from __future__ import annotations
 
 import os

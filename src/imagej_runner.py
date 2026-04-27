@@ -1,3 +1,5 @@
+"""Wrapper for the optional legacy ImageJ/Fiji preprocessing macro."""
+
 from __future__ import annotations
 
 import subprocess
@@ -14,6 +16,7 @@ def run_imagej_macro(
     macro_path: Path,
     logger,
 ) -> bool:
+    """Run the ImageJ macro and report success without raising subprocess errors."""
     csv_output_dir.mkdir(parents=True, exist_ok=True)
     (csv_output_dir / "processed_images").mkdir(parents=True, exist_ok=True)
 

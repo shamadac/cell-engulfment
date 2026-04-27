@@ -1,3 +1,5 @@
+"""Logging setup for timestamped pipeline runs."""
+
 from __future__ import annotations
 
 import logging
@@ -5,6 +7,7 @@ from pathlib import Path
 
 
 def setup_logger(output_dir: Path) -> logging.Logger:
+    """Create a logger that writes both to the console and the run directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = output_dir.name
     log_path = output_dir / f"process_log_{timestamp}.txt"
@@ -24,6 +27,8 @@ def setup_logger(output_dir: Path) -> logging.Logger:
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
+    # The pipeline passes the logger through several functions; attaching paths
+    # here avoids threading output_dir through every legacy helper.
     logger.output_dir = output_dir  # type: ignore[attr-defined]
     logger.log_path = log_path  # type: ignore[attr-defined]
     return logger

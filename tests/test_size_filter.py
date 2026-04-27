@@ -1,3 +1,5 @@
+"""Tests for volume-based object filtering."""
+
 from __future__ import annotations
 
 import logging

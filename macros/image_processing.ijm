@@ -5,6 +5,8 @@ if (tokens.length < 2) {
     exit("Expected arguments: <nd2_dir>,<csv_output_dir>");
 }
 
+// The Python runner passes paths as a single argument separated by "|", which
+// avoids ambiguity when microscopy folders contain commas or spaces.
 nd2Dir = tokens[0];
 csvDir = tokens[1];
 processedDir = csvDir + File.separator + "processed_images";
@@ -28,6 +30,9 @@ for (i = 0; i < list.length; i++) {
     filename = File.getNameWithoutExtension(list[i]);
     sourcePath = nd2Dir + File.separator + list[i];
 
+    // Bio-Formats splits the ND2 into channel windows used below. The macro is
+    // retained as a compatibility path for workflows that already depend on
+    // ImageJ object-table exports.
     run("Bio-Formats Importer", "open=[" + sourcePath + "] autoscale color_mode=Default view=Hyperstack stack_order=XYCZT split_channels");
 
     yeastWindow = filename + ".nd2 - C=1";
@@ -35,6 +40,8 @@ for (i = 0; i < list.length; i++) {
 
     print("Processing file: " + filename + ".nd2");
 
+    // The yeast/shell channel is thresholded and counted as 3D connected
+    // objects. These legacy settings produce *_scer.csv measurement tables.
     selectWindow(yeastWindow);
     run("Gaussian Blur...", "sigma=1 stack");
     setAutoThreshold("Otsu dark no-reset");
@@ -45,11 +52,15 @@ for (i = 0; i < list.length; i++) {
     saveAs("Results", csvDir + File.separator + filename + "_scer.csv");
     close(filename + "_scer.csv");
 
+    // Ensure transient windows are visible to ImageJ before cleanup. This helps
+    // older ImageJ builds keep the correct active image after plugin calls.
     for (x = 0; x < nImages; x++) {
         selectImage(x + 1);
         run("View 100%");
     }
 
+    // The bacterial channel uses Triangle thresholding by default because sparse
+    // fluorescent objects are often poorly handled by a global Otsu threshold.
     selectWindow(bacteriaWindow);
     run("Gaussian Blur...", "sigma=1 stack");
     setAutoThreshold("Triangle dark no-reset");
@@ -60,6 +71,7 @@ for (i = 0; i < list.length; i++) {
     saveAs("Results", csvDir + File.separator + filename + "_hflu.csv");
     close(filename + "_hflu.csv");
 
+    // Save the binary masks as TIFF stacks for optional visual inspection.
     for (x = 0; x < nImages; x++) {
         selectImage(x + 1);
         run("View 100%");

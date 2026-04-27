@@ -1,10 +1,14 @@
 size_filters:
+  # Legacy CSV sessions use these volume bounds directly. The ND2 backend also
+  # uses them as defaults when channel-specific segmentation bounds are omitted.
   hflu_min_um3: 0.2
   hflu_max_um3: 15.0
   scer_min_um3: 40.0
   scer_max_um3: 2000.0
 
 sessions:
+  # Replace these paths with the location of your local ND2 files and desired
+  # object-table export directory. Leave nd2_dir null for CSV-only sessions.
   - label: "Example ND2 Session"
     csv_dir: "data/example_exports"
     nd2_dir: "path/to/nd2/files"
@@ -14,6 +18,8 @@ output_base_dir: "output"
 imagej_executable: null
 
 pipeline:
+  # python_native_nd2 reads Nikon files directly. legacy_csv consumes paired
+  # *_hflu.csv and *_scer.csv files. legacy_fiji runs the ImageJ macro first.
   backend: "python_native_nd2"
   workers: 2
   cache_dir: "data/cache"
@@ -23,6 +29,8 @@ pipeline:
 
 segmentation:
   scer:
+    # Channel names must match the names stored in the ND2 metadata, or use a
+    # zero-based channel index if metadata names are unavailable.
     channel: "DAPI"
     gaussian_sigma_xyz: [0.8, 1.0, 1.0]
     threshold_method: "mean"
@@ -33,6 +41,8 @@ segmentation:
     watershed: true
     watershed_min_distance_um: 2.5
   hflu:
+    # The bacterial channel is usually sparse, so the default threshold method
+    # is more conservative than the yeast-channel mean threshold.
     channel: "RFP red"
     gaussian_sigma_xyz: [0.5, 0.75, 0.75]
     threshold_method: "triangle"
@@ -44,6 +54,8 @@ segmentation:
     watershed_min_distance_um: 1.2
 
 engulfment:
+  # mask_containment uses labeled 3D masks. centroid_sphere is retained for
+  # legacy CSV sessions that do not include label volumes.
   method: "mask_containment"
   min_inside_fraction: 0.95
   interior_margin_um: 0.0

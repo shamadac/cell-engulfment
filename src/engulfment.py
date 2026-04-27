@@ -1,3 +1,5 @@
+"""Containment-based engulfment classification utilities."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,6 +13,8 @@ from scipy.spatial import cKDTree
 
 @dataclass(frozen=True)
 class EngulfmentResult:
+    """Summary and optional pair-level details for one sample classification."""
+
     engulfing_yeast_count: int
     engulfment_rate: float
     engulfed_yeast_indices: list[int]
@@ -20,6 +24,7 @@ class EngulfmentResult:
 
 
 def _slice_centroid_inside(mask_2d: np.ndarray, points: np.ndarray) -> bool:
+    """Test whether the centroid of a 2D object slice falls inside a mask."""
     if points.size == 0:
         return False
     centroid = np.rint(points.mean(axis=0)).astype(int)
@@ -33,6 +38,7 @@ def _label_shell_cavity_mask(
     scer_support_mask: np.ndarray,
     label_id: int,
 ) -> np.ndarray:
+    """Recover the hollow cavity inside a shell-like scer support mask."""
     cavity = np.zeros_like(scer_labels, dtype=bool)
     for z_index in range(scer_labels.shape[0]):
         label_plane = scer_labels[z_index] == label_id
@@ -44,6 +50,7 @@ def _label_shell_cavity_mask(
 
 
 def compute_hflu_radius(row: pd.Series) -> float:
+    """Approximate a bacterial object radius from its bounding-box half diagonal."""
     return float(
         np.sqrt(
             (row["B-width"] / 2) ** 2
@@ -54,10 +61,12 @@ def compute_hflu_radius(row: pd.Series) -> float:
 
 
 def compute_scer_radius(row: pd.Series) -> float:
+    """Approximate a yeast object radius from its largest bounding-box dimension."""
     return float(max(row["B-width"], row["B-height"], row["B-depth"]) / 2)
 
 
 def is_engulfed(scer_row: pd.Series, hflu_row: pd.Series) -> bool:
+    """Legacy sphere-containment test used for CSV-only object tables."""
     scer_centroid = np.array([scer_row["XM"], scer_row["YM"], scer_row["ZM"]], dtype=float)
     hflu_centroid = np.array([hflu_row["XM"], hflu_row["YM"], hflu_row["ZM"]], dtype=float)
     distance = float(np.linalg.norm(scer_centroid - hflu_centroid))
@@ -65,6 +74,7 @@ def is_engulfed(scer_row: pd.Series, hflu_row: pd.Series) -> bool:
 
 
 def classify_sample(hflu_df: pd.DataFrame, scer_df: pd.DataFrame) -> EngulfmentResult:
+    """Classify engulfment from measurement CSVs using the legacy sphere model."""
     if hflu_df.empty or scer_df.empty:
         return EngulfmentResult(
             engulfing_yeast_count=0,
@@ -100,6 +110,7 @@ def classify_sample(hflu_df: pd.DataFrame, scer_df: pd.DataFrame) -> EngulfmentR
 
 
 def _centroid_inside_label(label_volume: np.ndarray, label_id: int, row: pd.Series) -> bool:
+    """Check a measured object's voxel centroid against a labeled volume."""
     z = int(np.clip(round(float(row["voxel_centroid_z"])), 0, label_volume.shape[0] - 1))
     y = int(np.clip(round(float(row["voxel_centroid_y"])), 0, label_volume.shape[1] - 1))
     x = int(np.clip(round(float(row["voxel_centroid_x"])), 0, label_volume.shape[2] - 1))
@@ -107,6 +118,7 @@ def _centroid_inside_label(label_volume: np.ndarray, label_id: int, row: pd.Seri
 
 
 def _overlap_counts(hflu_labels: np.ndarray, scer_labels: np.ndarray) -> dict[tuple[int, int], int]:
+    """Count voxel overlaps for every hflu/scer label pair in one vectorized pass."""
     hflu_flat = hflu_labels.ravel().astype(np.int64, copy=False)
     scer_flat = scer_labels.ravel().astype(np.int64, copy=False)
     valid = (hflu_flat > 0) & (scer_flat > 0)
@@ -127,6 +139,7 @@ def _apply_interior_margin(
     spacing_zyx: tuple[float, float, float],
     interior_margin_um: float,
 ) -> np.ndarray:
+    """Erode candidate interiors in physical units before containment testing."""
     if interior_margin_um <= 0 or scer_labels.max() == 0:
         return scer_labels
 
@@ -168,6 +181,11 @@ def classify_mask_containment(
     spacing_zyx: tuple[float, float, float] = (1.0, 1.0, 1.0),
     allow_shared_bacteria: bool = False,
 ) -> EngulfmentResult:
+    """Classify engulfment by exact voxel containment within labeled interiors.
+
+    Candidate pairs are first narrowed by centroid distance using a KD-tree, then
+    confirmed by overlap fraction and centroid-in-interior checks on label masks.
+    """
     if hflu_df.empty or scer_df.empty:
         return EngulfmentResult(
             engulfing_yeast_count=0,
@@ -192,6 +210,9 @@ def classify_mask_containment(
     candidate_rows: list[dict[str, Any]] = []
     for scer_idx, scer_row in scer_lookup.iterrows():
         scer_centroid = np.array([scer_row["XM"], scer_row["YM"], scer_row["ZM"]], dtype=float)
+        # The search radius encloses the yeast bounding box plus the largest
+        # bacterial radius; exact voxel overlap is checked only for these nearby
+        # candidates.
         search_radius = float(
             np.linalg.norm(
                 np.array(
@@ -246,6 +267,8 @@ def classify_mask_containment(
     chosen_rows: list[dict[str, Any]] = []
     ambiguous_bacteria_count = 0
     for matches in by_bacteria.values():
+        # By default, each bacterium contributes to at most one yeast. Ambiguous
+        # matches are resolved toward the strongest inside-fraction evidence.
         ordered = sorted(
             matches,
             key=lambda item: (
@@ -298,6 +321,7 @@ def validate_shell_cavity_support(
     min_overlap_fraction: float,
     min_centroid_slice_fraction: float,
 ) -> EngulfmentResult:
+    """Require candidate bacteria to be supported by a shell-enclosed cavity signal."""
     if not engulfment_result.assignment_rows or scer_support_mask is None:
         return engulfment_result
 
@@ -321,6 +345,8 @@ def validate_shell_cavity_support(
         overlap_voxels = int((bacterium_mask & cavity_mask).sum())
         cavity_overlap_fraction = overlap_voxels / total_bacterium_voxels
 
+        # The centroid-slice criterion preserves elongated objects that occupy a
+        # cavity across slices even when voxel overlap is reduced by shell gaps.
         occupied_slices = np.where(bacterium_mask.any(axis=(1, 2)))[0]
         centroid_slice_hits = 0
         for z_index in occupied_slices:

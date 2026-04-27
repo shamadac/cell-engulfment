@@ -1,3 +1,5 @@
+"""Tests for replicate statistics and group-comparison selection."""
+
 from __future__ import annotations
 
 import pytest

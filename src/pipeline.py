@@ -1,3 +1,5 @@
+"""Top-level orchestration for configured analysis sessions."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -28,6 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _resolved_backend(config: PipelineConfig, session) -> str:
+    """Choose a backend from explicit config or available session inputs."""
     if config.pipeline.backend is not None:
         return config.pipeline.backend
     if session.nd2_dir is not None and config.imagej_executable is not None:
@@ -42,6 +45,7 @@ def process_sample(
     *,
     backend_label: str = "legacy_csv",
 ) -> SampleResult:
+    """Process one paired hflu/scer CSV sample through legacy classification."""
     hflu_df, scer_df = load_sample_csvs(sample)
     output_dir = Path(logger.output_dir)  # type: ignore[attr-defined]
 
@@ -93,6 +97,7 @@ def process_sample(
 
 
 def _process_legacy_session(session, config: PipelineConfig, logger, output_dir: Path) -> list[SampleResult]:
+    """Process a session from existing object CSVs or an ImageJ macro export."""
     macro_path = PROJECT_ROOT / "macros" / "image_processing.ijm"
     backend = _resolved_backend(config, session)
 
@@ -142,6 +147,7 @@ def _process_legacy_session(session, config: PipelineConfig, logger, output_dir:
 
 
 def run_pipeline(config: PipelineConfig) -> list[SampleResult]:
+    """Run every configured session and write run-level outputs."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = config.output_base_dir / timestamp
     logger = setup_logger(output_dir)
@@ -167,6 +173,8 @@ def run_pipeline(config: PipelineConfig) -> list[SampleResult]:
 
         results.extend(_process_legacy_session(session, config, logger, output_dir))
 
+    # Summary and QC/performance tables are written even when no samples finish,
+    # which makes failed or empty runs easier to inspect programmatically.
     write_summary_csv(results, output_dir)
     write_qc_summary_csv(results, output_dir)
     write_performance_csv(results, output_dir)

@@ -1,3 +1,5 @@
+"""Volume-based object filtering for legacy measurement tables."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -11,6 +13,7 @@ def apply_size_filter(
     sample_name: str,
     logger,
 ) -> pd.DataFrame:
+    """Keep objects whose measured volumes fall inside an inclusive range."""
     if min_vol > max_vol:
         raise ValueError("min_vol must be less than or equal to max_vol")
 

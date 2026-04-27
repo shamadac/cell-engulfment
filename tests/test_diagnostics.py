@@ -1,3 +1,5 @@
+"""Tests for diagnostic size-distribution plot generation."""
+
 from __future__ import annotations
 
 from pathlib import Path

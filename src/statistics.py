@@ -1,3 +1,5 @@
+"""Replicate-level summary statistics and group comparisons."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -13,6 +15,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ReplicateStats:
+    """Descriptive statistics for one biological replicate."""
+
     biological_replicate: str
     n: int
     mean_engulfment_rate: float
@@ -25,6 +29,8 @@ class ReplicateStats:
 
 @dataclass(frozen=True)
 class GroupComparisonResult:
+    """Selected group test and the rationale for using it."""
+
     test_name: str
     statistic: float | None
     p_value: float | None
@@ -32,6 +38,7 @@ class GroupComparisonResult:
 
 
 def _group_rates(results: list["SampleResult"]) -> dict[str, list[float]]:
+    """Collect sample-level engulfment rates by biological replicate."""
     grouped: dict[str, list[float]] = defaultdict(list)
     for result in results:
         grouped[result.biological_replicate].append(float(result.engulfment_rate))
@@ -39,6 +46,7 @@ def _group_rates(results: list["SampleResult"]) -> dict[str, list[float]]:
 
 
 def compute_replicate_stats(results: list["SampleResult"]) -> list[ReplicateStats]:
+    """Compute mean, SEM, and normality status for each replicate."""
     replicate_stats: list[ReplicateStats] = []
     for biological_replicate, rates in _group_rates(results).items():
         n = len(rates)
@@ -75,6 +83,7 @@ def run_group_comparison(
     replicate_stats: list[ReplicateStats],
     results: list["SampleResult"],
 ) -> GroupComparisonResult:
+    """Select ANOVA only when replicate-level normality checks support it."""
     grouped_rates = _group_rates(results)
     groups = list(grouped_rates.values())
 

@@ -1,3 +1,5 @@
+"""Tests for 3D segmentation, measurement, and object rejection rules."""
+
 from __future__ import annotations
 
 import numpy as np

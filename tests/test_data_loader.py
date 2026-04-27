@@ -1,3 +1,5 @@
+"""Tests for paired CSV discovery and required-column validation."""
+
 from __future__ import annotations
 
 import logging

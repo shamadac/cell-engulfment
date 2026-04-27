@@ -1,3 +1,5 @@
+"""Shared helpers for turning object tables into per-sample results."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +13,7 @@ from models import SampleResult
 
 
 def volume_stats(df: pd.DataFrame) -> tuple[float, float, float]:
+    """Return mean, median, and sample standard deviation for object volumes."""
     if df.empty:
         return (float("nan"), float("nan"), float("nan"))
     series = df["Volume (micron^3)"]
@@ -18,6 +21,7 @@ def volume_stats(df: pd.DataFrame) -> tuple[float, float, float]:
 
 
 def summarize_reject_reasons(df: pd.DataFrame) -> str:
+    """Compact pipe-delimited rejection reasons into a stable JSON count string."""
     if "reject_reason" not in df.columns:
         return ""
 
@@ -48,6 +52,11 @@ def build_sample_result(
     review_required: bool = False,
     ambiguous_bacteria_count: int = 0,
 ) -> SampleResult:
+    """Build the canonical result row for one sample.
+
+    The function keeps all downstream writers on the same schema whether a sample
+    came from legacy object CSVs or from the Python-native ND2 backend.
+    """
     hflu_before_stats = volume_stats(hflu_before)
     scer_before_stats = volume_stats(scer_before)
     hflu_after_stats = volume_stats(hflu_after)

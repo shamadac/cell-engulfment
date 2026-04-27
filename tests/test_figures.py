@@ -1,3 +1,5 @@
+"""Tests for run-level figure generation helpers."""
+
 from __future__ import annotations
 
 from pathlib import Path

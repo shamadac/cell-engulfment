@@ -1,3 +1,5 @@
+"""Command-line entry point for the cell-engulfment pipeline."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,6 +10,7 @@ from pipeline import run_pipeline
 
 
 def main() -> int:
+    """Parse CLI arguments, load configuration, and run the pipeline."""
     parser = argparse.ArgumentParser(description="Run the cell-engulfment analysis pipeline.")
     parser.add_argument("--config", default="config.yaml", help="Path to the pipeline config file.")
     args = parser.parse_args()

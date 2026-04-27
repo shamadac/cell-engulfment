@@ -1,3 +1,5 @@
+"""Configuration models and validation for command-line pipeline runs."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -13,6 +15,8 @@ class ConfigError(Exception):
 
 
 class SizeFilterConfig(BaseModel):
+    """Volume thresholds applied to legacy CSV object tables."""
+
     hflu_min_um3: float = Field(ge=0)
     hflu_max_um3: float = Field(ge=0)
     scer_min_um3: float = Field(ge=0)
@@ -28,6 +32,8 @@ class SizeFilterConfig(BaseModel):
 
 
 class SessionConfig(BaseModel):
+    """Input and output locations for one microscopy acquisition session."""
+
     label: str
     csv_dir: Path
     nd2_dir: Path | None = None
@@ -41,6 +47,8 @@ class SessionConfig(BaseModel):
 
 
 class FigureConfig(BaseModel):
+    """Settings shared by all output plots."""
+
     dpi: int = Field(default=300, ge=300)
     format: str = "png"
     violin_plot: bool = False
@@ -55,6 +63,8 @@ class FigureConfig(BaseModel):
 
 
 class PipelineRuntimeConfig(BaseModel):
+    """Runtime switches for backend selection, caching, and parallelism."""
+
     backend: Literal["legacy_csv", "legacy_fiji", "python_native_nd2"] | None = None
     workers: int = Field(default=2, ge=1)
     cache_dir: Path | None = None
@@ -64,6 +74,8 @@ class PipelineRuntimeConfig(BaseModel):
 
 
 class ChannelSegmentationConfig(BaseModel):
+    """Segmentation parameters for one fluorescence channel."""
+
     channel: int | str
     gaussian_sigma_xyz: tuple[float, float, float] = (0.8, 1.0, 1.0)
     threshold_method: Literal["otsu", "triangle", "yen", "li", "mean"] = "otsu"
@@ -99,11 +111,15 @@ class ChannelSegmentationConfig(BaseModel):
 
 
 class SegmentationConfig(BaseModel):
+    """Pair of channel-specific segmentation configurations."""
+
     scer: ChannelSegmentationConfig
     hflu: ChannelSegmentationConfig
 
 
 class EngulfmentConfig(BaseModel):
+    """Parameters controlling bacterial containment classification."""
+
     method: Literal["centroid_sphere", "mask_containment"] = "centroid_sphere"
     min_inside_fraction: float = Field(default=0.95, ge=0.0, le=1.0)
     interior_margin_um: float = Field(default=0.0, ge=0.0)
@@ -115,6 +131,8 @@ class EngulfmentConfig(BaseModel):
 
 
 class PipelineConfig(BaseModel):
+    """Top-level validated configuration loaded from YAML."""
+
     size_filters: SizeFilterConfig
     sessions: list[SessionConfig]
     output_base_dir: Path
@@ -133,6 +151,7 @@ class PipelineConfig(BaseModel):
 
     @model_validator(mode="after")
     def hydrate_v2_defaults(self) -> "PipelineConfig":
+        """Fill optional Python-native defaults from legacy size-filter settings."""
         if self.pipeline.cache_dir is None:
             self.pipeline.cache_dir = self.output_base_dir / "cache"
 
@@ -175,6 +194,7 @@ class PipelineConfig(BaseModel):
 
 
 def _resolve_path(value: str | None, base_dir: Path) -> str | None:
+    """Resolve relative config paths against the directory containing the YAML file."""
     if value is None:
         return None
     path = Path(value).expanduser()
@@ -184,6 +204,7 @@ def _resolve_path(value: str | None, base_dir: Path) -> str | None:
 
 
 def _prepare_raw_config(raw_config: dict, base_dir: Path) -> dict:
+    """Normalize path-like strings before pydantic turns them into Path objects."""
     prepared = deepcopy(raw_config)
     prepared["output_base_dir"] = _resolve_path(prepared.get("output_base_dir"), base_dir)
     prepared["imagej_executable"] = _resolve_path(prepared.get("imagej_executable"), base_dir)
@@ -201,6 +222,7 @@ def _prepare_raw_config(raw_config: dict, base_dir: Path) -> dict:
 
 
 def _validate_paths(config: PipelineConfig) -> None:
+    """Fail early when configured inputs or output parents are unavailable."""
     if config.imagej_executable is not None and not config.imagej_executable.exists():
         raise ConfigError(f"Configured ImageJ executable does not exist: {config.imagej_executable}")
 
@@ -225,6 +247,7 @@ def _validate_paths(config: PipelineConfig) -> None:
 
 
 def load_config(config_path: str | Path) -> PipelineConfig:
+    """Load, normalize, and validate a YAML configuration file."""
     path = Path(config_path).expanduser()
     if not path.is_absolute():
         path = path.resolve()
