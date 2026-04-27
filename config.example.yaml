@@ -1,0 +1,59 @@
+size_filters:
+  hflu_min_um3: 0.2
+  hflu_max_um3: 15.0
+  scer_min_um3: 40.0
+  scer_max_um3: 2000.0
+
+sessions:
+  - label: "Example ND2 Session"
+    csv_dir: "data/example_exports"
+    nd2_dir: "path/to/nd2/files"
+
+output_base_dir: "output"
+
+imagej_executable: null
+
+pipeline:
+  backend: "python_native_nd2"
+  workers: 2
+  cache_dir: "data/cache"
+  save_qc_overlays: true
+  save_label_stacks: false
+  stage_nd2_to_local: "auto"
+
+segmentation:
+  scer:
+    channel: "DAPI"
+    gaussian_sigma_xyz: [0.8, 1.0, 1.0]
+    threshold_method: "mean"
+    threshold_scale: 1.25
+    min_volume_um3: 40.0
+    max_volume_um3: 2000.0
+    remove_border_objects: true
+    watershed: true
+    watershed_min_distance_um: 2.5
+  hflu:
+    channel: "RFP red"
+    gaussian_sigma_xyz: [0.5, 0.75, 0.75]
+    threshold_method: "triangle"
+    threshold_scale: 1.0
+    min_volume_um3: 0.2
+    max_volume_um3: 15.0
+    remove_border_objects: true
+    watershed: true
+    watershed_min_distance_um: 1.2
+
+engulfment:
+  method: "mask_containment"
+  min_inside_fraction: 0.95
+  interior_margin_um: 0.0
+  require_shell_cavity_support: true
+  shell_cavity_min_overlap_fraction: 0.5
+  shell_cavity_min_centroid_slice_fraction: 0.5
+  allow_shared_bacteria: false
+  save_assignment_details: true
+
+figures:
+  dpi: 300
+  format: "png"
+  violin_plot: false

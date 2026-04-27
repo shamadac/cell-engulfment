@@ -1,0 +1,18 @@
+size_filters:
+  hflu_min_um3: 0.2
+  hflu_max_um3: 0.5
+  scer_min_um3: 40.0
+  scer_max_um3: 100.0
+
+sessions:
+  - label: "Fixture Session"
+    csv_dir: "sample_session"
+
+output_base_dir: "../../output"
+
+imagej_executable: null
+
+figures:
+  dpi: 300
+  format: "png"
+  violin_plot: true

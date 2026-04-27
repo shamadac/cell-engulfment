@@ -1,0 +1,15 @@
+output/
+data/
+config.yaml
+*.nd2
+*.tif
+*.tiff
+*.zip
+__pycache__/
+.pytest_cache/
+.hypothesis/
+*.pyc
+*.pyo
+.venv/
+.env
+*.log
